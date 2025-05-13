@@ -1,13 +1,15 @@
 import express from "express";
-import publicRoutes from "./routes/public.js";
+import cors from "cors";
+import publicRouter from "./routes/public.js";
 
 const app = express();
-app.use(express.json());
 
-app.use("/users", publicRoutes); // /users/cadastro
+app.use(cors()); // Permitir acesso do frontend
+app.use(express.json()); // Permitir JSON no body
+app.use("/", publicRouter); // Todas as rotas vêm de public.js
 
-app.listen(3000, () => {
-  console.log("Servidor rodando na porta 3000");
+app.listen(4000, () => {
+  console.log("Servidor rodando na porta 4000");
 });
 
 /*
