@@ -1,10 +1,14 @@
 import express from "express";
 import bcrypt from "bcrypt";
 import pkg from "@prisma/client";
+import jwt from "jsonwebtoken";
 
 const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
 const publicRouter = express.Router();
+
+// eslint-disable-next-line no-undef
+const JWT_SECRET = process.env.JWT_SECRET;
 
 // Cadastro
 publicRouter.post("/cadastro", async (req, res) => {
@@ -24,7 +28,8 @@ publicRouter.post("/cadastro", async (req, res) => {
 
     res.status(201).json(userdb);
   } catch (err) {
-    res.status(500).json({ message: "Erro de Servidor, Tenta Novamente" });
+    console.error(err);
+    res.status(500).json({ message: "Erro de Servidor, Tente Novamente" });
   }
 });
 
@@ -47,8 +52,17 @@ publicRouter.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Senha inválida" });
     }
 
-    res.status(200).json({ message: "Login bem-sucedido", user });
+    // Gerar token JWT
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "7d" });
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password, ...userSafe } = user;
+
+    res
+      .status(200)
+      .json({ message: "Login bem-sucedido", user: userSafe, token });
   } catch (err) {
+    console.error(err);
     res.status(500).json({ message: "Erro de Servidor, Tente Novamente" });
   }
 });
