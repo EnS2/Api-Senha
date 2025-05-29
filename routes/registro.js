@@ -1,13 +1,14 @@
-import { Router } from "express";
+import express from "express";
 import { PrismaClient } from "@prisma/client";
 import { ObjectId } from "bson";
 
 const prisma = new PrismaClient();
-const registroRouter = Router();
+const registroRouter = express.Router();
 
 registroRouter.post("/registrar", async (req, res) => {
   try {
     const {
+      id,
       rgCondutor,
       dataMarcada,
       horaInicio,
@@ -21,16 +22,14 @@ registroRouter.post("/registrar", async (req, res) => {
       placa,
     } = req.body;
 
-    // ID fixo do usuário que está criando o registro (string)
     const userId = "682b46002186204a3a8e150c";
 
-    // Validar userId
     if (!ObjectId.isValid(userId)) {
       return res.status(400).json({ error: "userId inválido." });
     }
 
-    // Validar campos obrigatórios
     if (
+      !id ||
       !rgCondutor ||
       !dataMarcada ||
       !horaSaida ||
@@ -44,35 +43,30 @@ registroRouter.post("/registrar", async (req, res) => {
         .json({ error: "Campos obrigatórios estão faltando." });
     }
 
-    // Validar e converter data
     const dataMarcadaDate = new Date(dataMarcada);
     if (isNaN(dataMarcadaDate.getTime())) {
       return res.status(400).json({ error: "dataMarcada inválida." });
     }
 
-    // Validar números
     const kmIdaNum = parseFloat(kmIda);
     const kmVoltaNum = parseFloat(kmVolta);
     if (isNaN(kmIdaNum) || isNaN(kmVoltaNum)) {
-      return res
-        .status(400)
-        .json({ error: "kmIda ou kmVolta devem ser números válidos." });
+      return res.status(400).json({ error: "kmIda ou kmVolta inválidos." });
     }
 
-    // Converter userId para ObjectId para uso com Prisma/MongoDB
     const userObjectId = new ObjectId(userId);
 
-    // Verificar se usuário existe no DB
     const usuarioExiste = await prisma.user.findUnique({
       where: { id: userObjectId },
     });
+
     if (!usuarioExiste) {
       return res.status(400).json({ error: "Usuário não encontrado." });
     }
 
-    // Criar registro
     const novoRegistro = await prisma.registro.create({
       data: {
+        id,
         rgCondutor,
         dataMarcada: dataMarcadaDate,
         horaInicio: horaInicio ?? null,
@@ -93,7 +87,21 @@ registroRouter.post("/registrar", async (req, res) => {
     console.error("Erro ao criar registro:", error);
     return res
       .status(500)
-      .json({ error: error.message || "Erro ao criar registro" });
+      .json({ error: error.message || "Erro interno no servidor." });
+  }
+});
+
+registroRouter.get("/registrar", async (req, res) => {
+  try {
+    const registros = await prisma.registro.findMany({
+      orderBy: { dataMarcada: "desc" },
+    });
+    return res.status(200).json(registros);
+  } catch (error) {
+    console.error("Erro ao buscar registros:", error);
+    return res
+      .status(500)
+      .json({ error: error.message || "Erro interno no servidor." });
   }
 });
 
