@@ -47,12 +47,10 @@ registroRouter.post("/registrar", autenticarToken, async (req, res) => {
 
     const { id: userId } = req.usuario;
 
-    // Validação do userId
     if (!ObjectId.isValid(userId)) {
       return res.status(400).json({ error: "userId inválido." });
     }
 
-    // Validação de campos obrigatórios
     if (
       !dataMarcada ||
       !horaSaida ||
@@ -134,7 +132,6 @@ registroRouter.put("/registrar/:id", autenticarToken, async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validar id
     if (!ObjectId.isValid(id)) {
       return res.status(400).json({ error: "ID do registro inválido." });
     }
@@ -153,7 +150,6 @@ registroRouter.put("/registrar/:id", autenticarToken, async (req, res) => {
       rgCondutor,
     } = req.body;
 
-    // Validação de campos obrigatórios para atualização
     if (
       !dataMarcada ||
       !horaSaida ||
@@ -179,7 +175,6 @@ registroRouter.put("/registrar/:id", autenticarToken, async (req, res) => {
       return res.status(400).json({ error: "kmIda ou kmVolta inválidos." });
     }
 
-    // Atualizar registro no banco
     const registroAtualizado = await prisma.registro.update({
       where: { id },
       data: {
@@ -201,7 +196,31 @@ registroRouter.put("/registrar/:id", autenticarToken, async (req, res) => {
   } catch (error) {
     console.error("Erro ao atualizar registro:", error);
     if (error.code === "P2025") {
-      // Registro não encontrado no Prisma
+      return res.status(404).json({ error: "Registro não encontrado." });
+    }
+    return res
+      .status(500)
+      .json({ error: error.message || "Erro interno no servidor." });
+  }
+});
+
+// Rota DELETE: Deletar um registro pelo id
+registroRouter.delete("/registrar/:id", autenticarToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "ID do registro inválido." });
+    }
+
+    await prisma.registro.delete({
+      where: { id },
+    });
+
+    return res.status(204).send(); // Sucesso, sem conteúdo
+  } catch (error) {
+    console.error("Erro ao deletar registro:", error);
+    if (error.code === "P2025") {
       return res.status(404).json({ error: "Registro não encontrado." });
     }
     return res
