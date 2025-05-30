@@ -1,15 +1,37 @@
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import { ObjectId } from "bson";
+import jwt from "jsonwebtoken";
 
 const prisma = new PrismaClient();
 const registroRouter = express.Router();
 
-registroRouter.post("/registrar", async (req, res) => {
+// Middleware para autenticar o token e obter userId e nome
+function autenticarToken(req, res, next) {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Token não fornecido." });
+  }
+
+  const token = authHeader.split(" ")[1];
+
+  try {
+    // eslint-disable-next-line no-undef
+    const segredo = process.env.JWT_SECRET || "segredo-padrao";
+    const usuario = jwt.verify(token, segredo);
+    req.usuario = usuario;
+    next();
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  } catch (err) {
+    return res.status(403).json({ error: "Token inválido." });
+  }
+}
+
+// Rota POST: Criar novo registro
+registroRouter.post("/registrar", autenticarToken, async (req, res) => {
   try {
     const {
-      id,
-      rgCondutor,
       dataMarcada,
       horaInicio,
       horaSaida,
@@ -20,23 +42,25 @@ registroRouter.post("/registrar", async (req, res) => {
       editadoPor,
       veiculo,
       placa,
+      rgCondutor,
     } = req.body;
 
-    const userId = "682b46002186204a3a8e150c";
+    const { id: userId } = req.usuario;
 
+    // Validação do userId
     if (!ObjectId.isValid(userId)) {
       return res.status(400).json({ error: "userId inválido." });
     }
 
+    // Validação de campos obrigatórios
     if (
-      !id ||
-      !rgCondutor ||
       !dataMarcada ||
       !horaSaida ||
       kmIda === undefined ||
       kmVolta === undefined ||
       !veiculo ||
-      !placa
+      !placa ||
+      !rgCondutor
     ) {
       return res
         .status(400)
@@ -66,7 +90,6 @@ registroRouter.post("/registrar", async (req, res) => {
 
     const novoRegistro = await prisma.registro.create({
       data: {
-        id,
         rgCondutor,
         dataMarcada: dataMarcadaDate,
         horaInicio: horaInicio ?? null,
@@ -91,7 +114,8 @@ registroRouter.post("/registrar", async (req, res) => {
   }
 });
 
-registroRouter.get("/registrar", async (req, res) => {
+// Rota GET: Listar todos os registros
+registroRouter.get("/registrar", autenticarToken, async (req, res) => {
   try {
     const registros = await prisma.registro.findMany({
       orderBy: { dataMarcada: "desc" },
@@ -99,6 +123,87 @@ registroRouter.get("/registrar", async (req, res) => {
     return res.status(200).json(registros);
   } catch (error) {
     console.error("Erro ao buscar registros:", error);
+    return res
+      .status(500)
+      .json({ error: error.message || "Erro interno no servidor." });
+  }
+});
+
+// Rota PUT: Atualizar um registro pelo id
+registroRouter.put("/registrar/:id", autenticarToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validar id
+    if (!ObjectId.isValid(id)) {
+      return res.status(400).json({ error: "ID do registro inválido." });
+    }
+
+    const {
+      dataMarcada,
+      horaInicio,
+      horaSaida,
+      destino,
+      kmIda,
+      kmVolta,
+      observacao,
+      editadoPor,
+      veiculo,
+      placa,
+      rgCondutor,
+    } = req.body;
+
+    // Validação de campos obrigatórios para atualização
+    if (
+      !dataMarcada ||
+      !horaSaida ||
+      kmIda === undefined ||
+      kmVolta === undefined ||
+      !veiculo ||
+      !placa ||
+      !rgCondutor
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Campos obrigatórios estão faltando." });
+    }
+
+    const dataMarcadaDate = new Date(dataMarcada);
+    if (isNaN(dataMarcadaDate.getTime())) {
+      return res.status(400).json({ error: "dataMarcada inválida." });
+    }
+
+    const kmIdaNum = parseFloat(kmIda);
+    const kmVoltaNum = parseFloat(kmVolta);
+    if (isNaN(kmIdaNum) || isNaN(kmVoltaNum)) {
+      return res.status(400).json({ error: "kmIda ou kmVolta inválidos." });
+    }
+
+    // Atualizar registro no banco
+    const registroAtualizado = await prisma.registro.update({
+      where: { id },
+      data: {
+        rgCondutor,
+        dataMarcada: dataMarcadaDate,
+        horaInicio: horaInicio ?? null,
+        horaSaida,
+        destino: destino ?? null,
+        kmIda: kmIdaNum,
+        kmVolta: kmVoltaNum,
+        observacao: observacao ?? null,
+        editadoPor: editadoPor ?? null,
+        veiculo,
+        placa,
+      },
+    });
+
+    return res.status(200).json(registroAtualizado);
+  } catch (error) {
+    console.error("Erro ao atualizar registro:", error);
+    if (error.code === "P2025") {
+      // Registro não encontrado no Prisma
+      return res.status(404).json({ error: "Registro não encontrado." });
+    }
     return res
       .status(500)
       .json({ error: error.message || "Erro interno no servidor." });
