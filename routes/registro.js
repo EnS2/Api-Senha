@@ -4,7 +4,7 @@ import { ObjectId } from "bson";
 import jwt from "jsonwebtoken";
 
 const prisma = new PrismaClient();
-const registroRouter = express.Router();
+const router = express.Router();
 
 // Middleware para autenticar o token e obter userId e nome
 function autenticarToken(req, res, next) {
@@ -28,8 +28,8 @@ function autenticarToken(req, res, next) {
   }
 }
 
-// Rota POST: Criar novo registro
-registroRouter.post("/registrar", autenticarToken, async (req, res) => {
+// POST: Criar novo registro
+router.post("/registrar", autenticarToken, async (req, res) => {
   try {
     const {
       dataMarcada,
@@ -112,13 +112,32 @@ registroRouter.post("/registrar", autenticarToken, async (req, res) => {
   }
 });
 
-// Rota GET: Listar todos os registros
-registroRouter.get("/registrar", autenticarToken, async (req, res) => {
+// GET: Listar todos os registros formatados
+router.get("/registrar", autenticarToken, async (req, res) => {
   try {
     const registros = await prisma.registro.findMany({
       orderBy: { dataMarcada: "desc" },
+      include: {
+        user: {
+          select: {
+            nome: true,
+          },
+        },
+      },
     });
-    return res.status(200).json(registros);
+
+    const registrosFormatados = registros.map((r) => ({
+      id: r.id,
+      data: new Date(r.dataMarcada).toLocaleDateString("pt-BR"),
+      nome: r.user?.nome ?? "Desconhecido",
+      rg: r.rgCondutor,
+      veiculo: r.veiculo,
+      placa: r.placa,
+      kmInicial: r.kmIda,
+      kmFinal: r.kmVolta,
+    }));
+
+    return res.status(200).json(registrosFormatados);
   } catch (error) {
     console.error("Erro ao buscar registros:", error);
     return res
@@ -127,8 +146,8 @@ registroRouter.get("/registrar", autenticarToken, async (req, res) => {
   }
 });
 
-// Rota PUT: Atualizar um registro pelo id
-registroRouter.put("/registrar/:id", autenticarToken, async (req, res) => {
+// PUT: Atualizar registro por ID
+router.put("/registrar/:id", autenticarToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -204,8 +223,8 @@ registroRouter.put("/registrar/:id", autenticarToken, async (req, res) => {
   }
 });
 
-// Rota DELETE: Deletar um registro pelo id
-registroRouter.delete("/registrar/:id", autenticarToken, async (req, res) => {
+// DELETE: Deletar registro por ID
+router.delete("/registrar/:id", autenticarToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -217,7 +236,7 @@ registroRouter.delete("/registrar/:id", autenticarToken, async (req, res) => {
       where: { id },
     });
 
-    return res.status(204).send(); // Sucesso, sem conteúdo
+    return res.status(204).send();
   } catch (error) {
     console.error("Erro ao deletar registro:", error);
     if (error.code === "P2025") {
@@ -229,4 +248,4 @@ registroRouter.delete("/registrar/:id", autenticarToken, async (req, res) => {
   }
 });
 
-export default registroRouter;
+export default router;
