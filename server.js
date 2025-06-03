@@ -2,7 +2,6 @@ import express from "express";
 import cors from "cors";
 import publicRouter from "./routes/public.js";
 import registroRouter from "./routes/registro.js";
-import anotacaoRouter from "./routes/anotacao.js";
 
 const app = express();
 
@@ -11,9 +10,8 @@ app.use(cors());
 app.use(express.json());
 
 // ✅ Rotas
-app.use("/registro", registroRouter); // POST /registro/registrar
-app.use("/anotacao", anotacaoRouter); // POST /anotacao
-app.use("/", publicRouter); // GET /
+app.use("/registro", registroRouter);
+app.use("/", publicRouter);
 
 app.use((req, res) => {
   res.status(404).json({ message: "Rota não encontrada" });
