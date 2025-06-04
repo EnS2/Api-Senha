@@ -79,7 +79,7 @@ router.post("/registrar", autenticarToken, async (req, res) => {
     const userObjectId = new ObjectId(userId);
 
     const usuarioExiste = await prisma.user.findUnique({
-      where: { id: userObjectId },
+      where: { id: userObjectId.toHexString() },
     });
 
     if (!usuarioExiste) {
@@ -99,7 +99,7 @@ router.post("/registrar", autenticarToken, async (req, res) => {
         editadoPor: editadoPor ?? null,
         veiculo,
         placa,
-        userId: userObjectId,
+        userId: userObjectId.toHexString(),
       },
     });
 
@@ -120,7 +120,7 @@ router.get("/registrar", autenticarToken, async (req, res) => {
       include: {
         user: {
           select: {
-            nome: true,
+            name: true, // corrigido de 'nome' para 'name'
           },
         },
       },
@@ -129,7 +129,7 @@ router.get("/registrar", autenticarToken, async (req, res) => {
     const registrosFormatados = registros.map((r) => ({
       id: r.id,
       data: new Date(r.dataMarcada).toLocaleDateString("pt-BR"),
-      nome: r.user?.nome ?? "Desconhecido",
+      nome: r.user?.name ?? "Desconhecido",
       rg: r.rgCondutor,
       veiculo: r.veiculo,
       placa: r.placa,
