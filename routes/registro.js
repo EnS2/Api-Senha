@@ -2,11 +2,13 @@ import express from "express";
 import { PrismaClient } from "@prisma/client";
 import { ObjectId } from "bson";
 import jwt from "jsonwebtoken";
+import { startOfDay, endOfDay } from "date-fns";
+import { z } from "zod";
 
 const prisma = new PrismaClient();
 const router = express.Router();
 
-// Middleware para autenticar o token e obter userId e nome
+// Middleware de autenticação
 function autenticarToken(req, res, next) {
   const authHeader = req.headers.authorization;
 
@@ -28,9 +30,45 @@ function autenticarToken(req, res, next) {
   }
 }
 
-// POST: Criar novo registro
+// Esquema com transformação de strings para número e aceitando null para campos opcionais
+const registroSchema = z.object({
+  dataMarcada: z.string(),
+  horaInicio: z.string().optional(),
+  horaSaida: z.string(),
+  destino: z.string().optional(),
+  kmIda: z.coerce.number(),
+  kmVolta: z.coerce.number(),
+  observacao: z.string().nullable().optional(), // aceita string, null ou undefined
+  editadoPor: z.string().nullable().optional(),
+  veiculo: z.string(),
+  placa: z.string(),
+  rgCondutor: z.string(),
+});
+
+function ajustarParaFusoSP(date) {
+  const offsetSP = -3 * 60;
+  const utc = date.getTime() + date.getTimezoneOffset() * 60000;
+  return new Date(utc + offsetSP * 60000);
+}
+
+// POST
 router.post("/registrar", autenticarToken, async (req, res) => {
   try {
+    // Ajusta campos que podem vir null para undefined para melhor compatibilidade com o schema
+    const body = { ...req.body };
+    if (body.observacao === null) body.observacao = undefined;
+    if (body.editadoPor === null) body.editadoPor = undefined;
+
+    const parseResult = registroSchema.safeParse(body);
+
+    if (!parseResult.success) {
+      console.error("Erros de validação:", parseResult.error.format());
+      return res.status(400).json({
+        error: "Dados inválidos.",
+        detalhes: parseResult.error.errors,
+      });
+    }
+
     const {
       dataMarcada,
       horaInicio,
@@ -43,7 +81,7 @@ router.post("/registrar", autenticarToken, async (req, res) => {
       veiculo,
       placa,
       rgCondutor,
-    } = req.body;
+    } = parseResult.data;
 
     const { id: userId } = req.usuario;
 
@@ -51,35 +89,15 @@ router.post("/registrar", autenticarToken, async (req, res) => {
       return res.status(400).json({ error: "userId inválido." });
     }
 
-    if (
-      !dataMarcada ||
-      !horaSaida ||
-      kmIda === undefined ||
-      kmVolta === undefined ||
-      !veiculo ||
-      !placa ||
-      !rgCondutor
-    ) {
-      return res
-        .status(400)
-        .json({ error: "Campos obrigatórios estão faltando." });
-    }
-
+    const userObjectId = new ObjectId(userId);
     const dataMarcadaDate = new Date(dataMarcada);
+
     if (isNaN(dataMarcadaDate.getTime())) {
       return res.status(400).json({ error: "dataMarcada inválida." });
     }
 
-    const kmIdaNum = parseFloat(kmIda);
-    const kmVoltaNum = parseFloat(kmVolta);
-    if (isNaN(kmIdaNum) || isNaN(kmVoltaNum)) {
-      return res.status(400).json({ error: "kmIda ou kmVolta inválidos." });
-    }
-
-    const userObjectId = new ObjectId(userId);
-
     const usuarioExiste = await prisma.user.findUnique({
-      where: { id: userObjectId.toHexString() },
+      where: { id: userObjectId },
     });
 
     if (!usuarioExiste) {
@@ -93,13 +111,13 @@ router.post("/registrar", autenticarToken, async (req, res) => {
         horaInicio: horaInicio ?? null,
         horaSaida,
         destino: destino ?? null,
-        kmIda: kmIdaNum,
-        kmVolta: kmVoltaNum,
+        kmIda,
+        kmVolta,
         observacao: observacao ?? null,
         editadoPor: editadoPor ?? null,
         veiculo,
         placa,
-        userId: userObjectId.toHexString(),
+        userId: userObjectId,
       },
     });
 
@@ -112,17 +130,33 @@ router.post("/registrar", autenticarToken, async (req, res) => {
   }
 });
 
-// GET: Listar todos os registros formatados
+// GET
 router.get("/registrar", autenticarToken, async (req, res) => {
   try {
+    const { id: userId } = req.usuario;
+
+    const agoraSP = ajustarParaFusoSP(new Date());
+    const inicioDoDiaSP = startOfDay(agoraSP);
+    const fimDoDiaSP = endOfDay(agoraSP);
+
+    const inicioUtc = new Date(
+      inicioDoDiaSP.getTime() - inicioDoDiaSP.getTimezoneOffset() * 60000
+    );
+    const fimUtc = new Date(
+      fimDoDiaSP.getTime() - fimDoDiaSP.getTimezoneOffset() * 60000
+    );
+
     const registros = await prisma.registro.findMany({
+      where: {
+        userId: userId,
+        dataMarcada: {
+          gte: inicioUtc,
+          lte: fimUtc,
+        },
+      },
       orderBy: { dataMarcada: "desc" },
       include: {
-        user: {
-          select: {
-            name: true, // corrigido de 'nome' para 'name'
-          },
-        },
+        user: true,
       },
     });
 
@@ -146,13 +180,27 @@ router.get("/registrar", autenticarToken, async (req, res) => {
   }
 });
 
-// PUT: Atualizar registro por ID
+// PUT
 router.put("/registrar/:id", autenticarToken, async (req, res) => {
   try {
     const { id } = req.params;
 
     if (!ObjectId.isValid(id)) {
       return res.status(400).json({ error: "ID do registro inválido." });
+    }
+
+    // Ajusta campos que podem vir null para undefined
+    const body = { ...req.body };
+    if (body.observacao === null) body.observacao = undefined;
+    if (body.editadoPor === null) body.editadoPor = undefined;
+
+    const parseResult = registroSchema.safeParse(body);
+
+    if (!parseResult.success) {
+      return res.status(400).json({
+        error: "Dados inválidos.",
+        detalhes: parseResult.error.errors,
+      });
     }
 
     const {
@@ -167,31 +215,11 @@ router.put("/registrar/:id", autenticarToken, async (req, res) => {
       veiculo,
       placa,
       rgCondutor,
-    } = req.body;
-
-    if (
-      !dataMarcada ||
-      !horaSaida ||
-      kmIda === undefined ||
-      kmVolta === undefined ||
-      !veiculo ||
-      !placa ||
-      !rgCondutor
-    ) {
-      return res
-        .status(400)
-        .json({ error: "Campos obrigatórios estão faltando." });
-    }
+    } = parseResult.data;
 
     const dataMarcadaDate = new Date(dataMarcada);
     if (isNaN(dataMarcadaDate.getTime())) {
       return res.status(400).json({ error: "dataMarcada inválida." });
-    }
-
-    const kmIdaNum = parseFloat(kmIda);
-    const kmVoltaNum = parseFloat(kmVolta);
-    if (isNaN(kmIdaNum) || isNaN(kmVoltaNum)) {
-      return res.status(400).json({ error: "kmIda ou kmVolta inválidos." });
     }
 
     const registroAtualizado = await prisma.registro.update({
@@ -202,8 +230,8 @@ router.put("/registrar/:id", autenticarToken, async (req, res) => {
         horaInicio: horaInicio ?? null,
         horaSaida,
         destino: destino ?? null,
-        kmIda: kmIdaNum,
-        kmVolta: kmVoltaNum,
+        kmIda,
+        kmVolta,
         observacao: observacao ?? null,
         editadoPor: editadoPor ?? null,
         veiculo,
@@ -223,7 +251,7 @@ router.put("/registrar/:id", autenticarToken, async (req, res) => {
   }
 });
 
-// DELETE: Deletar registro por ID
+// DELETE
 router.delete("/registrar/:id", autenticarToken, async (req, res) => {
   try {
     const { id } = req.params;
