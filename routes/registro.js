@@ -49,7 +49,7 @@ const registroSchema = z.object({
 });
 
 // POST /registrar
-router.post("/registrar", autenticarToken, async (req, res) => {
+router.post("/", autenticarToken, async (req, res) => {
   try {
     const body = { ...req.body };
     if (body.observacao === null) body.observacao = undefined;
@@ -119,9 +119,9 @@ router.post("/registrar", autenticarToken, async (req, res) => {
 });
 
 // GET /registrar
-router.get("/registrar", autenticarToken, async (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const userId = req.usuario.id;
+    const userId = "682b46002186204a3a8e150c"; //req.usuario.id;
 
     const dataParam = req.query.data;
     let dataFiltro = {};
@@ -189,7 +189,7 @@ router.get("/registrar", autenticarToken, async (req, res) => {
 });
 
 // PUT /registrar/:id
-router.put("/registrar/:id", autenticarToken, async (req, res) => {
+router.put("/:id", autenticarToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.usuario.id;
@@ -272,7 +272,7 @@ router.put("/registrar/:id", autenticarToken, async (req, res) => {
 });
 
 // DELETE /registrar/:id
-router.delete("/registrar/:id", autenticarToken, async (req, res) => {
+router.delete("/:id", autenticarToken, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.usuario.id;
