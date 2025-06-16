@@ -118,10 +118,10 @@ router.post("/", autenticarToken, async (req, res) => {
   }
 });
 
-// GET /registrar
-router.get("/", async (req, res) => {
+// GET /registro
+router.get("/", autenticarToken, async (req, res) => {
   try {
-    const userId = "682b46002186204a3a8e150c"; //req.usuario.id;
+    const userId = req.usuario.id;
 
     const dataParam = req.query.data;
     let dataFiltro = {};
