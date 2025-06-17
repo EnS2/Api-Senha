@@ -55,7 +55,6 @@ router.post("/", autenticarToken, async (req, res) => {
     if (body.observacao === null) body.observacao = undefined;
 
     const parseResult = registroSchema.safeParse(body);
-
     if (!parseResult.success) {
       console.error("Erros de validação:", parseResult.error.format());
       return res.status(400).json({
@@ -79,7 +78,10 @@ router.post("/", autenticarToken, async (req, res) => {
 
     const userId = req.usuario.id;
 
-    const dataMarcadaDate = new Date(dataMarcada);
+    // Corrigir criação da data local
+    const [year, month, day] = dataMarcada.split("-").map(Number);
+    const dataMarcadaDate = new Date(year, month - 1, day);
+
     if (isNaN(dataMarcadaDate.getTime())) {
       return res.status(400).json({ error: "dataMarcada inválida." });
     }
@@ -118,19 +120,32 @@ router.post("/", autenticarToken, async (req, res) => {
   }
 });
 
-// GET /registro
+// GET /registrar
 router.get("/", autenticarToken, async (req, res) => {
   try {
     const userId = req.usuario.id;
-
     const dataParam = req.query.data;
     let dataFiltro = {};
 
     if (dataParam) {
-      const dataParamDate = new Date(dataParam);
-      if (isNaN(dataParamDate.getTime())) {
+      let dataParamDate;
+
+      try {
+        dataParamDate = new Date(dataParam);
+
+        // Se for um formato customizado tipo "YYYY-MM-DD", trata manualmente
+        if (dataParam.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(dataParam)) {
+          const [year, month, day] = dataParam.split("-").map(Number);
+          dataParamDate = new Date(year, month - 1, day);
+        }
+
+        if (isNaN(dataParamDate.getTime())) {
+          throw new Error("Data inválida");
+        }
+      } catch {
         return res.status(400).json({ error: "Parâmetro de data inválido." });
       }
+
       const inicioDoDia = startOfDay(dataParamDate);
       const fimDoDia = endOfDay(dataParamDate);
 
@@ -202,7 +217,6 @@ router.put("/:id", autenticarToken, async (req, res) => {
     if (body.observacao === null) body.observacao = undefined;
 
     const parseResult = registroSchema.safeParse(body);
-
     if (!parseResult.success) {
       return res.status(400).json({
         error: "Dados inválidos.",
@@ -223,7 +237,10 @@ router.put("/:id", autenticarToken, async (req, res) => {
       rgCondutor,
     } = parseResult.data;
 
-    const dataMarcadaDate = new Date(dataMarcada);
+    // Corrigir dataMarcada local
+    const [year, month, day] = dataMarcada.split("-").map(Number);
+    const dataMarcadaDate = new Date(year, month - 1, day);
+
     if (isNaN(dataMarcadaDate.getTime())) {
       return res.status(400).json({ error: "dataMarcada inválida." });
     }
