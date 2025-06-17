@@ -133,7 +133,6 @@ router.get("/", autenticarToken, async (req, res) => {
       try {
         dataParamDate = new Date(dataParam);
 
-        // Se for um formato customizado tipo "YYYY-MM-DD", trata manualmente
         if (dataParam.length === 10 && /^\d{4}-\d{2}-\d{2}$/.test(dataParam)) {
           const [year, month, day] = dataParam.split("-").map(Number);
           dataParamDate = new Date(year, month - 1, day);
@@ -172,6 +171,9 @@ router.get("/", autenticarToken, async (req, res) => {
         kmIda: true,
         kmVolta: true,
         observacao: true,
+        horaInicio: true,
+        horaSaida: true,
+        destino: true,
         editadoPor: true,
         user: {
           select: {
@@ -183,7 +185,8 @@ router.get("/", autenticarToken, async (req, res) => {
 
     const registrosFormatados = registros.map((r) => ({
       id: r.id,
-      data: new Date(r.dataMarcada).toLocaleDateString("pt-BR"),
+      dataFormatada: new Date(r.dataMarcada).toLocaleDateString("pt-BR"),
+      dataISO: r.dataMarcada.toISOString().split("T")[0],
       nome: r.user?.name ?? "Desconhecido",
       rg: r.rgCondutor,
       veiculo: r.veiculo,
@@ -191,6 +194,9 @@ router.get("/", autenticarToken, async (req, res) => {
       kmInicial: r.kmIda,
       kmFinal: r.kmVolta,
       observacoes: r.observacao,
+      horaInicio: r.horaInicio,
+      horaSaida: r.horaSaida,
+      destino: r.destino,
       editadoPor: r.editadoPor,
     }));
 
