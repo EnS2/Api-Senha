@@ -20,6 +20,7 @@ model User {
 
 model Registro {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  condutor    String   
   rgCondutor  String
   dataMarcada DateTime
   horaInicio  String?
@@ -39,6 +40,7 @@ model Registro {
 
   @@index([userId, dataMarcada])
 }
+
 
 
 

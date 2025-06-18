@@ -44,7 +44,7 @@ const registroSchema = z.object({
   observacao: z.string().nullable().optional(),
   veiculo: z.string(),
   placa: z.string(),
-  rgCondutor: z.string(),
+  rgCondutor: z.string(), // usuário preenche
 });
 
 // POST /registrar
@@ -62,6 +62,7 @@ router.post("/", autenticarToken, async (req, res) => {
     }
 
     const {
+      rgCondutor,
       dataMarcada,
       horaInicio,
       horaSaida,
@@ -71,26 +72,24 @@ router.post("/", autenticarToken, async (req, res) => {
       observacao,
       veiculo,
       placa,
-      rgCondutor,
     } = parseResult.data;
 
     const userId = req.usuario.id;
-    const [year, month, day] = dataMarcada.split("-").map(Number);
-    const dataMarcadaDate = new Date(year, month - 1, day);
+    const dataMarcadaDate = new Date(`${dataMarcada}T00:00:00.000Z`);
 
     if (isNaN(dataMarcadaDate.getTime())) {
       return res.status(400).json({ error: "dataMarcada inválida." });
     }
 
-    const usuarioExiste = await prisma.user.findUnique({
-      where: { id: userId },
-    });
-    if (!usuarioExiste) {
+    const usuario = await prisma.user.findUnique({ where: { id: userId } });
+
+    if (!usuario) {
       return res.status(400).json({ error: "Usuário não encontrado." });
     }
 
     const novoRegistro = await prisma.registro.create({
       data: {
+        condutor: usuario.name, // automático
         rgCondutor,
         dataMarcada: dataMarcadaDate,
         horaInicio: horaInicio ?? null,
@@ -109,9 +108,9 @@ router.post("/", autenticarToken, async (req, res) => {
     return res.status(201).json(novoRegistro);
   } catch (error) {
     console.error("Erro ao criar registro:", error);
-    return res
-      .status(500)
-      .json({ error: error.message || "Erro interno no servidor." });
+    return res.status(500).json({
+      error: error.message || "Erro interno no servidor.",
+    });
   }
 });
 
@@ -126,8 +125,7 @@ router.get("/", autenticarToken, async (req, res) => {
       let dataParamDate;
       try {
         if (/^\d{4}-\d{2}-\d{2}$/.test(dataParam)) {
-          const [year, month, day] = dataParam.split("-").map(Number);
-          dataParamDate = new Date(year, month - 1, day);
+          dataParamDate = new Date(`${dataParam}T00:00:00.000Z`);
         } else {
           dataParamDate = new Date(dataParam);
         }
@@ -158,6 +156,7 @@ router.get("/", autenticarToken, async (req, res) => {
       dataFormatada: new Date(r.dataMarcada).toLocaleDateString("pt-BR"),
       dataISO: r.dataMarcada.toISOString().split("T")[0],
       nome: r.user?.name || "Nome não disponível",
+      condutor: r.condutor || "",
       rg: r.rgCondutor,
       veiculo: r.veiculo,
       placa: r.placa,
@@ -213,8 +212,7 @@ router.put("/:id", autenticarToken, async (req, res) => {
       rgCondutor,
     } = parseResult.data;
 
-    const [year, month, day] = dataMarcada.split("-").map(Number);
-    const dataMarcadaDate = new Date(year, month - 1, day);
+    const dataMarcadaDate = new Date(`${dataMarcada}T00:00:00.000Z`);
 
     if (isNaN(dataMarcadaDate.getTime())) {
       return res.status(400).json({ error: "dataMarcada inválida." });
