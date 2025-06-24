@@ -12,37 +12,40 @@ dotenv.config();
 
 const app = express();
 
-// Segurança e parsing
+// 🔐 Segurança e parsing
 app.use(helmet());
 app.use(cors({ origin: process.env.FRONTEND_URL || "*" }));
 app.use(express.json());
 
-// Middleware de log simples (opcional)
+// 📝 Logger de requisições (útil para debug)
 app.use((req, res, next) => {
-  console.log(`[${req.method}] ${req.url}`);
+  console.log(`[${req.method}] ${req.originalUrl}`);
   next();
 });
 
-// Rota de status
+// ✅ Rota de status
 app.get("/", (req, res) => {
   res.status(200).json({ message: "API funcionando 🚀" });
 });
 
-// ✅ Agora com prefixo /public
-app.use("/public", publicRouter); // /public/login, /public/cadastro, /public/criar-admin
-app.use("/registrar", registroRouter); // /registrar (CRUD de registros)
+// 📦 Rotas públicas (sem autenticação): /login, /cadastro, /criar-admin
+app.use("/", publicRouter);
 
-// Rota não encontrada
+// 🔒 Rotas protegidas (com autenticação): /registrar
+app.use("/registrar", registroRouter);
+
+// ❌ Rota não encontrada
 app.use((req, res) => {
   res.status(404).json({ message: "Rota não encontrada." });
 });
 
-// Erro interno
+// 🛠️ Tratamento global de erros
 app.use((err, req, res, next) => {
   console.error("Erro interno:", err);
   res.status(500).json({ message: "Erro interno do servidor." });
 });
 
+// 🚀 Iniciar o servidor
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => {
   console.log(`🚀 Servidor rodando em http://localhost:${PORT}`);
