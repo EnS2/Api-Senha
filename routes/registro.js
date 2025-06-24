@@ -117,21 +117,16 @@ router.post("/", autenticarToken, async (req, res) => {
 // GET /registrar
 router.get("/", autenticarToken, async (req, res) => {
   try {
-    const userId = req.usuario.id;
+    const { id: userId, role } = req.usuario;
     const dataParam = req.query.data;
-    let dataFiltro = {};
 
+    let dataFiltro = {};
     if (dataParam) {
       let dataParamDate;
       try {
-        if (/^\d{4}-\d{2}-\d{2}$/.test(dataParam)) {
-          dataParamDate = new Date(`${dataParam}T00:00:00.000Z`);
-        } else {
-          dataParamDate = new Date(dataParam);
-        }
-
+        dataParamDate = new Date(`${dataParam}T00:00:00.000Z`);
         if (isNaN(dataParamDate.getTime())) {
-          throw new Error();
+          return res.status(400).json({ error: "Parâmetro de data inválido." });
         }
       } catch {
         return res.status(400).json({ error: "Parâmetro de data inválido." });
@@ -145,8 +140,12 @@ router.get("/", autenticarToken, async (req, res) => {
       };
     }
 
+    // Se ADMIN, aplica apenas o filtro de data (se existir), caso contrário filtra por userId também
+    const whereClause =
+      role === "ADMIN" ? dataFiltro : { userId, ...dataFiltro };
+
     const registros = await prisma.registro.findMany({
-      where: { userId, ...dataFiltro },
+      where: whereClause,
       orderBy: { dataMarcada: "desc" },
       include: { user: true },
     });

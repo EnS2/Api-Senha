@@ -10,17 +10,29 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ✅ Enum para o papel do usuário
+enum Role {
+  USER
+  ADMIN
+}
+
+// ✅ Modelo User
 model User {
   id        String     @id @default(auto()) @map("_id") @db.ObjectId
   email     String     @unique
   name      String
   password  String
-  registros Registro[] // Relação 1:N com Registro
+  role      Role       @default(USER) // Usa o enum Role aqui
+  registros Registro[]
+
+  createdAt DateTime?  @default(now())
+  updatedAt DateTime?  @updatedAt
 }
 
+// ✅ Modelo Registro
 model Registro {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
-  condutor    String   
+  condutor    String
   rgCondutor  String
   dataMarcada DateTime
   horaInicio  String?
@@ -40,9 +52,3 @@ model Registro {
 
   @@index([userId, dataMarcada])
 }
-
-
-
-
-
-

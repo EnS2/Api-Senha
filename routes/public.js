@@ -1,76 +1,119 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable no-undef */
 import express from "express";
 import bcrypt from "bcrypt";
 import pkg from "@prisma/client";
 import jwt from "jsonwebtoken";
+import { ROLES } from "./role.js";
 
 const { PrismaClient } = pkg;
 const prisma = new PrismaClient();
 const publicRouter = express.Router();
 
-// Usar fallback caso .env não esteja carregado corretamente
-// eslint-disable-next-line no-undef
 const JWT_SECRET = process.env.JWT_SECRET || "secrettokenfallback";
 
-// Cadastro
+// 📌 Cadastro de usuário comum
 publicRouter.post("/cadastro", async (req, res) => {
-  const user = req.body;
+  const { email, name, password } = req.body;
+
+  if (!email || !name || !password) {
+    return res.status(400).json({ error: "Todos os campos são obrigatórios" });
+  }
 
   try {
-    const salt = await bcrypt.genSalt(10);
-    const hashPassword = await bcrypt.hash(user.password, salt);
+    const existente = await prisma.user.findUnique({ where: { email } });
+    if (existente) {
+      return res.status(400).json({ error: "E-mail já cadastrado" });
+    }
 
-    const userdb = await prisma.user.create({
+    const hashPassword = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.create({
       data: {
-        email: user.email,
-        name: user.name,
+        email,
+        name,
         password: hashPassword,
+        role: ROLES.USER,
       },
     });
 
-    // Retornar sem o campo password
-    const { password, ...userSafe } = userdb;
-
-    res.status(201).json(userSafe);
+    const { password: _, ...userSemSenha } = user;
+    res.status(201).json(userSemSenha);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro de Servidor, Tente Novamente" });
+    console.error("Erro ao cadastrar usuário:", err);
+    res.status(500).json({ error: "Erro interno no servidor" });
   }
 });
 
-// Login
+// 🔐 Login (para USER e ADMIN)
 publicRouter.post("/login", async (req, res) => {
-  try {
-    const userInfo = req.body;
+  const { email, password } = req.body;
 
-    const user = await prisma.user.findUnique({
-      where: { email: userInfo.email },
-    });
+  if (!email || !password) {
+    return res.status(400).json({ error: "E-mail e senha obrigatórios" });
+  }
+
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
 
     if (!user) {
-      return res.status(404).json({ message: "Usuário não encontrado" });
+      return res.status(404).json({ error: "Usuário não encontrado" });
     }
 
-    const isMatch = await bcrypt.compare(userInfo.password, user.password);
-
+    const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(401).json({ message: "Senha inválida" });
+      return res.status(401).json({ error: "Senha incorreta" });
     }
 
-    // Gerar token JWT com id do user
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "7d" });
+    const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, {
+      expiresIn: "7d",
+    });
 
-    // Retornar user sem o campo password
-    const { password, ...userSafe } = user;
+    const { password: _, ...userSemSenha } = user;
 
     res.status(200).json({
       message: "Login bem-sucedido",
-      user: userSafe,
+      user: userSemSenha,
       token,
     });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Erro de Servidor, Tente Novamente" });
+    console.error("Erro no login:", err);
+    res.status(500).json({ error: "Erro interno no servidor" });
+  }
+});
+
+// 👑 Criar administrador
+publicRouter.post("/criar-admin", async (req, res) => {
+  const { name, email, password } = req.body;
+
+  if (!name || !email || !password) {
+    return res.status(400).json({ error: "Todos os campos são obrigatórios" });
+  }
+
+  try {
+    const existente = await prisma.user.findUnique({ where: { email } });
+    if (existente) {
+      return res.status(400).json({ error: "E-mail já cadastrado" });
+    }
+
+    const senhaHash = await bcrypt.hash(password, 10);
+
+    const admin = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: senhaHash,
+        role: ROLES.ADMIN,
+      },
+    });
+
+    const { password: _, ...adminSemSenha } = admin;
+    res
+      .status(201)
+      .json({ message: "Admin criado com sucesso", admin: adminSemSenha });
+  } catch (error) {
+    console.error("Erro ao criar admin:", error);
+    res.status(500).json({ error: "Erro interno no servidor" });
   }
 });
 
