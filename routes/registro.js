@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { startOfDay, endOfDay } from "date-fns";
 import { z } from "zod";
+import { ROLES } from "./role.js";
 
 const prisma = new PrismaClient();
 const router = express.Router();
@@ -44,7 +45,7 @@ const registroSchema = z.object({
   observacao: z.string().nullable().optional(),
   veiculo: z.string(),
   placa: z.string(),
-  rgCondutor: z.string(), // usuário preenche
+  rgCondutor: z.string(),
 });
 
 // POST /registrar
@@ -89,7 +90,7 @@ router.post("/", autenticarToken, async (req, res) => {
 
     const novoRegistro = await prisma.registro.create({
       data: {
-        condutor: usuario.name, // automático
+        condutor: usuario.name,
         rgCondutor,
         dataMarcada: dataMarcadaDate,
         horaInicio: horaInicio ?? null,
@@ -140,9 +141,8 @@ router.get("/", autenticarToken, async (req, res) => {
       };
     }
 
-    // Se ADMIN, aplica apenas o filtro de data (se existir), caso contrário filtra por userId também
     const whereClause =
-      role === "ADMIN" ? dataFiltro : { userId, ...dataFiltro };
+      role === ROLES.ADMIN ? dataFiltro : { userId, ...dataFiltro };
 
     const registros = await prisma.registro.findMany({
       where: whereClause,
@@ -181,7 +181,7 @@ router.get("/", autenticarToken, async (req, res) => {
 router.put("/:id", autenticarToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.usuario.id;
+    const { id: userId, role } = req.usuario;
 
     if (!id || typeof id !== "string") {
       return res.status(400).json({ error: "ID do registro inválido." });
@@ -212,7 +212,6 @@ router.put("/:id", autenticarToken, async (req, res) => {
     } = parseResult.data;
 
     const dataMarcadaDate = new Date(`${dataMarcada}T00:00:00.000Z`);
-
     if (isNaN(dataMarcadaDate.getTime())) {
       return res.status(400).json({ error: "dataMarcada inválida." });
     }
@@ -220,11 +219,12 @@ router.put("/:id", autenticarToken, async (req, res) => {
     const registroExistente = await prisma.registro.findUnique({
       where: { id },
     });
+
     if (!registroExistente) {
       return res.status(404).json({ error: "Registro não encontrado." });
     }
 
-    if (registroExistente.userId !== userId) {
+    if (registroExistente.userId !== userId && role !== ROLES.ADMIN) {
       return res
         .status(403)
         .json({ error: "Sem permissão para editar este registro." });
@@ -260,7 +260,7 @@ router.put("/:id", autenticarToken, async (req, res) => {
 router.delete("/:id", autenticarToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const userId = req.usuario.id;
+    const { id: userId, role } = req.usuario;
 
     if (!id || typeof id !== "string") {
       return res.status(400).json({ error: "ID do registro inválido." });
@@ -269,11 +269,12 @@ router.delete("/:id", autenticarToken, async (req, res) => {
     const registroExistente = await prisma.registro.findUnique({
       where: { id },
     });
+
     if (!registroExistente) {
       return res.status(404).json({ error: "Registro não encontrado." });
     }
 
-    if (registroExistente.userId !== userId) {
+    if (registroExistente.userId !== userId && role !== ROLES.ADMIN) {
       return res
         .status(403)
         .json({ error: "Sem permissão para deletar este registro." });
