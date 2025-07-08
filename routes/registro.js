@@ -3,11 +3,15 @@ import express from "express";
 import { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { startOfDay, endOfDay } from "date-fns";
+import dateFnsTz from "date-fns-tz";
 import { z } from "zod";
 import { ROLES } from "./role.js";
 
+const { zonedTimeToUtc, formatInTimeZone } = dateFnsTz;
+
 const prisma = new PrismaClient();
 const router = express.Router();
+const TIMEZONE = "America/Sao_Paulo";
 
 // Middleware de autenticação JWT
 function autenticarToken(req, res, next) {
@@ -76,7 +80,7 @@ router.post("/", autenticarToken, async (req, res) => {
     } = parseResult.data;
 
     const userId = req.usuario.id;
-    const dataMarcadaDate = new Date(`${dataMarcada}T00:00:00.000Z`);
+    const dataMarcadaDate = zonedTimeToUtc(`${dataMarcada}T00:00:00`, TIMEZONE);
 
     if (isNaN(dataMarcadaDate.getTime())) {
       return res.status(400).json({ error: "dataMarcada inválida." });
@@ -122,10 +126,12 @@ router.get("/", autenticarToken, async (req, res) => {
     const dataParam = req.query.data;
 
     let dataFiltro = {};
+
     if (dataParam) {
       let dataParamDate;
+
       try {
-        dataParamDate = new Date(`${dataParam}T00:00:00.000Z`);
+        dataParamDate = zonedTimeToUtc(`${dataParam}T00:00:00`, TIMEZONE);
         if (isNaN(dataParamDate.getTime())) {
           return res.status(400).json({ error: "Parâmetro de data inválido." });
         }
@@ -152,8 +158,8 @@ router.get("/", autenticarToken, async (req, res) => {
 
     const registrosFormatados = registros.map((r) => ({
       id: r.id,
-      dataFormatada: new Date(r.dataMarcada).toLocaleDateString("pt-BR"),
-      dataISO: r.dataMarcada.toISOString().split("T")[0],
+      dataFormatada: formatInTimeZone(r.dataMarcada, TIMEZONE, "dd/MM/yyyy"),
+      dataISO: formatInTimeZone(r.dataMarcada, TIMEZONE, "yyyy-MM-dd"),
       nome: r.user?.name || "Nome não disponível",
       condutor: r.condutor || "",
       rg: r.rgCondutor,
@@ -211,7 +217,7 @@ router.put("/:id", autenticarToken, async (req, res) => {
       rgCondutor,
     } = parseResult.data;
 
-    const dataMarcadaDate = new Date(`${dataMarcada}T00:00:00.000Z`);
+    const dataMarcadaDate = zonedTimeToUtc(`${dataMarcada}T00:00:00`, TIMEZONE);
     if (isNaN(dataMarcadaDate.getTime())) {
       return res.status(400).json({ error: "dataMarcada inválida." });
     }
