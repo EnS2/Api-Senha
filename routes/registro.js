@@ -1,10 +1,11 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable no-undef */
 import express from "express";
 import { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";
+import { z } from "zod";
 import { startOfDay, endOfDay } from "date-fns";
 import dateFnsTz from "date-fns-tz";
-import { z } from "zod";
 import { ROLES } from "./role.js";
 
 const { zonedTimeToUtc, formatInTimeZone } = dateFnsTz;
@@ -80,14 +81,13 @@ router.post("/", autenticarToken, async (req, res) => {
     } = parseResult.data;
 
     const userId = req.usuario.id;
-    const dataMarcadaDate = zonedTimeToUtc(`${dataMarcada}T00:00:00`, TIMEZONE);
 
+    const dataMarcadaDate = zonedTimeToUtc(`${dataMarcada}T00:00:00`, TIMEZONE);
     if (isNaN(dataMarcadaDate.getTime())) {
       return res.status(400).json({ error: "dataMarcada inválida." });
     }
 
     const usuario = await prisma.user.findUnique({ where: { id: userId } });
-
     if (!usuario) {
       return res.status(400).json({ error: "Usuário não encontrado." });
     }
@@ -139,10 +139,15 @@ router.get("/", autenticarToken, async (req, res) => {
         return res.status(400).json({ error: "Parâmetro de data inválido." });
       }
 
+      const inicioDoDiaUTC = dataParamDate;
+      const fimDoDiaUTC = new Date(
+        inicioDoDiaUTC.getTime() + 24 * 60 * 60 * 1000 - 1
+      );
+
       dataFiltro = {
         dataMarcada: {
-          gte: startOfDay(dataParamDate),
-          lte: endOfDay(dataParamDate),
+          gte: inicioDoDiaUTC,
+          lte: fimDoDiaUTC,
         },
       };
     }
